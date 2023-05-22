@@ -1,0 +1,12 @@
+FROM debian:bullseye-slim
+
+# install dependencies
+RUN apt update && apt install -y \
+  # common build dependencies
+  bash git curl ccache cmake \
+  # c++ build dependencies
+  build-essential \
+  && apt clean && rm -rf /var/lib/apt/lists/*
+
+# set up main to run bash
+CMD ["/bin/bash", "-l"]
