@@ -33,6 +33,7 @@ starcoder_demo_generate(const starcoder_model &model, const gpt_vocab &vocab,
   std::vector<float> logits;
 
   n_predict = std::min(n_predict, model.hparams.n_ctx - (int)input_ids.size());
+  // printf("%s: corrected n_predict = %d\n", __func__, n_predict);
 
   //   std::string model_output_text = "";
   std::vector<std::string> model_output_tokens;
@@ -67,9 +68,8 @@ starcoder_demo_generate(const starcoder_model &model, const gpt_vocab &vocab,
 
     if (i >= input_ids.size()) {
       // sample next token
-      const int top_k = top_k;
-      const float top_p = top_p;
-      const float temp = temp;
+      // printf("%s: sampling token #%d (top_k = %d, top_p = %f, temp = %f)\n",
+      //       __func__, i, top_k, top_p, temp);
 
       const int n_vocab = model.hparams.n_vocab;
 
@@ -89,6 +89,7 @@ starcoder_demo_generate(const starcoder_model &model, const gpt_vocab &vocab,
       embd.push_back(id);
     } else {
       // if here, it means we are still processing the input prompt
+      // printf("%s: processing input token #%d\n", __func__, i);
       for (int k = i; k < input_ids.size(); k++) {
         embd.push_back(input_ids[k]);
         if (embd.size() >= n_batch) {
@@ -211,6 +212,10 @@ int main(int argc, char **argv) {
 
       printf("%s: prompt: '%s'\n", __func__, req_prompt.c_str());
       printf("%s: prompt_n = %zu\n", __func__, input_ids.size());
+      printf("%s: n_predict = %d\n", __func__, req_n_predict);
+      printf("%s: top_k = %d\n", __func__, req_top_k);
+      printf("%s: top_p = %f\n", __func__, req_top_p);
+      printf("%s: temp = %f\n", __func__, req_temp);
 
       // call model
       std::vector<std::string> output_tokens = starcoder_demo_generate(
