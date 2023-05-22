@@ -10,7 +10,7 @@ target_link_libraries(starcoder PRIVATE starcoder_ggml)
 
 # starcoder demo main
 set(TEST_TARGET starcoder-demo)
-add_executable(${TEST_TARGET} main.cpp)
+add_executable(${TEST_TARGET} demo.cpp)
 target_link_libraries(${TEST_TARGET} PRIVATE starcoder_ggml starcoder)
 
 #
