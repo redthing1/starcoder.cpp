@@ -271,6 +271,8 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             params.n_batch = std::stoi(argv[++i]);
         } else if (arg == "-m" || arg == "--model") {
             params.model = argv[++i];
+        } else if (arg == "-L" || arg == "--http-port") {
+            params.http_server_port = std::stoi(argv[++i]);
         } else if (arg == "-h" || arg == "--help") {
             gpt_print_usage(argc, argv, params);
             exit(0);

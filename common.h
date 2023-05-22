@@ -43,6 +43,7 @@ struct gpt_params {
 
     std::string model = "models/gpt-2-117M/ggml-model.bin"; // model path
     std::string prompt;
+    int http_server_port = 7264;
 };
 
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params);
