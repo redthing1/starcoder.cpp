@@ -1,3 +1,52 @@
+
+# starcoder.cpp: redthing1 fork
+
+changes:
++ removed makefile and replaced with working cmake
++ split into `libstarcoder`, `starcoder-demo`, and `starcoder-server`
++ pinned to a working ggml version
+
+## models
+
+compatible ggml models:
++ [starchat-alpha](https://huggingface.co/NeoDim/starchat-alpha-GGML/tree/3d1da7a18543b4f261f5c7b570eb92472720c0b1)
++ [starcoderbase](https://huggingface.co/NeoDim/starcoderbase-GGML/tree/ef61b1077c1138c8401a6ad9c3318d5b95f21d28)
+
+## build
+
+```sh
+mkdir build && cd build
+cmake ..
+make -j
+```
+
+## run starcoder server
+
+for example, to run with the Q5_1 starchat-alpha model:
+```sh
+./starcoder-server -m /path/to/starchat-alpha-ggml-q5_1.bin -t 4 -L 7264
+```
+
+then, make requests over http:
+
+`POST /v1/starcoder/generate`
++ input:
+    ```json
+    { 
+      "prompt": "...",
+      "n_predict": 200,
+      "top_k": 40,
+      "top_p": 0.9,
+      "temp": 0.9,
+      "stop_sequence": "..."
+    }
+    ```
+    
++ output:
+    ```json
+    { "text": "..." }
+    ```
+
 # 💫StarCoder in C++
 
 This is a C++ example running 💫 StarCoder inference using the [ggml](https://github.com/ggerganov/ggml) library.

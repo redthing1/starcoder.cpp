@@ -202,7 +202,7 @@ int main(int argc, char **argv) {
 
   // POST /v1/starcoder/generate
   //    Input: { "prompt": "...", "n_predict": 200, "top_k": 40, "top_p": 0.9,
-  //    "temp": 0.9 } Output: { "text": "..." }
+  //    "temp": 0.9, "stop_sequence": "..." } Output: { "text": "..." }
 
   svr.Post("/v1/starcoder/generate", [model, vocab, params,
                                       rng](const httplib::Request &req,
@@ -239,12 +239,12 @@ int main(int argc, char **argv) {
           req_temp, params.n_threads, params.n_batch, rng, stop_sequence);
 
       printf("%s: output_n = %zu\n", __func__, output_tokens.size());
-    //   // dump output tokens
-    //   printf("%s: output: [", __func__);
-    //   for (auto &token : output_tokens) {
-    //     printf("%s, ", token.c_str());
-    //   }
-    //   printf("]\n");
+      //   // dump output tokens
+      //   printf("%s: output: [", __func__);
+      //   for (auto &token : output_tokens) {
+      //     printf("%s, ", token.c_str());
+      //   }
+      //   printf("]\n");
 
       std::string model_output;
       // join tokens into a string
