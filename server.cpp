@@ -19,12 +19,11 @@
 
 #include "starcoder.hpp"
 
-std::string starcoder_demo_generate(const starcoder_model &model,
-                                    const gpt_vocab &vocab,
-                                    std::string prompt_text, int n_predict,
-                                    int top_k, float top_p, float temp,
-                                    int n_threads, int n_batch,
-                                    std::mt19937 rng) {
+std::vector<std::string>
+starcoder_demo_generate(const starcoder_model &model, const gpt_vocab &vocab,
+                        std::vector<gpt_vocab::id> input_ids, int n_predict,
+                        int top_k, float top_p, float temp, int n_threads,
+                        int n_batch, std::mt19937 rng) {
 
   int n_past = 0;
 
@@ -33,18 +32,10 @@ std::string starcoder_demo_generate(const starcoder_model &model,
 
   std::vector<float> logits;
 
-  // tokenize the prompt
-  std::vector<gpt_vocab::id> embd_inp = ::gpt_tokenize(vocab, prompt_text);
+  n_predict = std::min(n_predict, model.hparams.n_ctx - (int)input_ids.size());
 
-  n_predict = std::min(n_predict, model.hparams.n_ctx - (int)embd_inp.size());
-
-  printf("%s: prompt: '%s'\n", __func__, prompt_text.c_str());
-  printf("%s: number of tokens in prompt = %zu, first 8 tokens: ", __func__,
-         embd_inp.size());
-  for (int i = 0; i < std::min(8, (int)embd_inp.size()); i++) {
-    printf("%d ", embd_inp[i]);
-  }
-  printf("\n\n");
+  //   std::string model_output_text = "";
+  std::vector<std::string> model_output_tokens;
 
   // submit the input prompt token-by-token
   // this reduces the memory usage during inference, at the cost of a bit of
@@ -55,7 +46,7 @@ std::string starcoder_demo_generate(const starcoder_model &model,
   size_t mem_per_token = 0;
   starcoder_eval(model, n_threads, 0, {0, 1, 2, 3}, logits, mem_per_token);
 
-  for (int i = embd.size(); i < embd_inp.size() + n_predict; i++) {
+  for (int i = embd.size(); i < input_ids.size() + n_predict; i++) {
     // predict
     if (embd.size() > 0) {
       const int64_t t_start_us = ggml_time_us();
@@ -74,7 +65,7 @@ std::string starcoder_demo_generate(const starcoder_model &model,
     n_past += embd.size();
     embd.clear();
 
-    if (i >= embd_inp.size()) {
+    if (i >= input_ids.size()) {
       // sample next token
       const int top_k = top_k;
       const float top_p = top_p;
@@ -98,8 +89,8 @@ std::string starcoder_demo_generate(const starcoder_model &model,
       embd.push_back(id);
     } else {
       // if here, it means we are still processing the input prompt
-      for (int k = i; k < embd_inp.size(); k++) {
-        embd.push_back(embd_inp[k]);
+      for (int k = i; k < input_ids.size(); k++) {
+        embd.push_back(input_ids[k]);
         if (embd.size() >= n_batch) {
           break;
         }
@@ -107,41 +98,36 @@ std::string starcoder_demo_generate(const starcoder_model &model,
       i += embd.size() - 1;
     }
 
-    // // display text
-    // for (auto id : embd) {
-    //   printf("%s", vocab.id_to_token[id].c_str());
-    // }
-    // fflush(stdout);
-
-    // // check if model is santacoder
-    // if (model.hparams.n_layer <= 30 && embd.back() == 49152) {
-    //   break;
-    // }
-    // // check if model is starcoder
-    // else if (embd.back() == 0) { // TODO: this is only for starcoder
-    //   break;
-    // }
-
-    // return text as a string
-    std::string ret_text = "";
+    // display text
     for (auto id : embd) {
-      // ret_text += vocab.id_to_token[id];
+      // printf("%s", vocab.id_to_token[id].c_str());
       // use find instead of []
       auto it = vocab.id_to_token.find(id);
       if (it != vocab.id_to_token.end()) {
-        ret_text += it->second;
+        printf("%s", it->second.c_str());
+        // model_output_text += it->second;
+        model_output_tokens.push_back(it->second);
       } else {
         // throw an error (wtf token?)
         throw std::runtime_error("failed to decode token: " +
                                  std::to_string(id));
       }
     }
+    fflush(stdout);
 
-    return ret_text;
+    // check if model is santacoder
+    if (model.hparams.n_layer <= 30 && embd.back() == 49152) {
+      break;
+    }
+    // check if model is starcoder
+    else if (embd.back() == 0) { // TODO: this is only for starcoder
+      // printf("stopping generation due to end token\n");
+      break;
+    }
   }
 
-  // ???
-  return "";
+  //   return model_output_text;
+  return model_output_tokens;
 }
 
 int main(int argc, char **argv) {
@@ -202,43 +188,63 @@ int main(int argc, char **argv) {
   //    Input: { "prompt": "...", "n_predict": 200, "top_k": 40, "top_p": 0.9,
   //    "temp": 0.9 } Output: { "text": "..." }
 
-  svr.Post("/v1/starcoder/generate",
-           [model, vocab, params, rng](const httplib::Request &req,
-                                       httplib::Response &res) {
-             try {
-               // read the request body as JSON
-               nlohmann::json req_json = nlohmann::json::parse(req.body);
+  svr.Post("/v1/starcoder/generate", [model, vocab, params,
+                                      rng](const httplib::Request &req,
+                                           httplib::Response &res) {
+    try {
+      // read the request body as JSON
+      nlohmann::json req_json = nlohmann::json::parse(req.body);
 
-               // ensure prompt field is present
-               if (!req_json.contains("prompt")) {
-                 throw std::runtime_error("missing prompt field");
-               }
-               std::string req_prompt = req_json["prompt"];
-               // all other fields are optional
-               int req_n_predict = req_json.value("n_predict", 200);
-               int req_top_k = req_json.value("top_k", 40);
-               float req_top_p = req_json.value("top_p", 0.9);
-               float req_temp = req_json.value("temp", 0.9);
+      // ensure prompt field is present
+      if (!req_json.contains("prompt")) {
+        throw std::runtime_error("missing prompt field");
+      }
+      std::string req_prompt = req_json["prompt"];
+      // all other fields are optional
+      int req_n_predict = req_json.value("n_predict", 200);
+      int req_top_k = req_json.value("top_k", 40);
+      float req_top_p = req_json.value("top_p", 0.9);
+      float req_temp = req_json.value("temp", 0.9);
 
-               // call model
-               std::string model_output = starcoder_demo_generate(
-                   model, vocab, req_prompt, req_n_predict, req_top_k,
-                   req_top_p, req_temp, params.n_threads, params.n_batch, rng);
+      // tokenize the prompt
+      std::vector<gpt_vocab::id> input_ids = ::gpt_tokenize(vocab, req_prompt);
 
-               // create response json
-               nlohmann::json res_json;
-               res_json["text"] = model_output;
+      printf("%s: prompt: '%s'\n", __func__, req_prompt.c_str());
+      printf("%s: prompt_n = %zu\n", __func__, input_ids.size());
 
-               // set response content type
-               res.set_content(res_json.dump(), "application/json");
-               res.status = 200;
-             } catch (const std::exception &e) {
-               fprintf(stderr, "%s: exception: %s\n", __func__, e.what());
-               // res.set_content("{}", "application/json");
-               res.set_content(e.what(), "text/plain");
-               res.status = 400;
-             }
-           });
+      // call model
+      std::vector<std::string> output_tokens = starcoder_demo_generate(
+          model, vocab, input_ids, req_n_predict, req_top_k, req_top_p,
+          req_temp, params.n_threads, params.n_batch, rng);
+
+      printf("%s: output_n = %zu\n", __func__, output_tokens.size());
+      // dump output tokens
+      printf("%s: output: [", __func__);
+      for (auto &token : output_tokens) {
+        printf("%s, ", token.c_str());
+      }
+      printf("]\n");
+
+      std::string model_output;
+      // join tokens into a string
+      for (auto &token : output_tokens) {
+        model_output += token;
+      }
+
+      // create response json
+      nlohmann::json res_json;
+      res_json["text"] = model_output;
+
+      // set response content type
+      res.set_content(res_json.dump(), "application/json");
+      res.status = 200;
+    } catch (const std::exception &e) {
+      fprintf(stderr, "%s: exception: %s\n", __func__, e.what());
+      // res.set_content("{}", "application/json");
+      res.set_content(e.what(), "text/plain");
+      res.status = 400;
+    }
+  });
 
   // listen on port
   svr.listen("0.0.0.0", params.http_server_port);
