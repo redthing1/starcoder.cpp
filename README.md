@@ -3,6 +3,7 @@
 
 changes:
 + removed makefile and replaced with working cmake
++ implement starcoder http api server
 + split into `libstarcoder`, `starcoder-demo`, and `starcoder-server`
 + pinned to a working ggml version
 
