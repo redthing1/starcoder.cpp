@@ -21,6 +21,13 @@ cmake ..
 make -j
 ```
 
+## docker
+
+```sh
+podman build --rm . -t "starcoder_server"
+podman run --rm -it -p 7264:7264 -v /path/to/models:/models starcoder_server -m /models/starchat-alpha-ggml-q5_1.bin -t 4 -L 7264
+```
+
 ## run starcoder server
 
 for example, to run with the Q5_1 starchat-alpha model:
