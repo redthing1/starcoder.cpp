@@ -23,7 +23,8 @@ std::vector<std::string>
 starcoder_demo_generate(const starcoder_model &model, const gpt_vocab &vocab,
                         std::vector<gpt_vocab::id> input_ids, int n_predict,
                         int top_k, float top_p, float temp, int n_threads,
-                        int n_batch, std::mt19937 rng) {
+                        int n_batch, std::mt19937 rng,
+                        std::string stop_sequence = "") {
 
   int n_past = 0;
 
@@ -35,7 +36,7 @@ starcoder_demo_generate(const starcoder_model &model, const gpt_vocab &vocab,
   n_predict = std::min(n_predict, model.hparams.n_ctx - (int)input_ids.size());
   // printf("%s: corrected n_predict = %d\n", __func__, n_predict);
 
-  //   std::string model_output_text = "";
+  std::string model_output_text = "";
   std::vector<std::string> model_output_tokens;
 
   // submit the input prompt token-by-token
@@ -106,7 +107,7 @@ starcoder_demo_generate(const starcoder_model &model, const gpt_vocab &vocab,
       auto it = vocab.id_to_token.find(id);
       if (it != vocab.id_to_token.end()) {
         printf("%s", it->second.c_str());
-        // model_output_text += it->second;
+        model_output_text += it->second;
         model_output_tokens.push_back(it->second);
       } else {
         // throw an error (wtf token?)
@@ -116,6 +117,8 @@ starcoder_demo_generate(const starcoder_model &model, const gpt_vocab &vocab,
     }
     fflush(stdout);
 
+    // handle end of text tokens
+
     // check if model is santacoder
     if (model.hparams.n_layer <= 30 && embd.back() == 49152) {
       break;
@@ -124,6 +127,18 @@ starcoder_demo_generate(const starcoder_model &model, const gpt_vocab &vocab,
     else if (embd.back() == 0) { // TODO: this is only for starcoder
       // printf("stopping generation due to end token\n");
       break;
+    }
+
+    // handle specific stop sequence (see if output text ends with it)
+    if (stop_sequence.size() > 0) {
+      // check if output text ends with stop sequence
+      if (model_output_text.size() >= stop_sequence.size() &&
+          model_output_text.substr(model_output_text.size() -
+                                       stop_sequence.size(),
+                                   stop_sequence.size()) == stop_sequence) {
+        // printf("stopping generation due to stop sequence\n");
+        break;
+      }
     }
   }
 
@@ -206,6 +221,7 @@ int main(int argc, char **argv) {
       int req_top_k = req_json.value("top_k", 40);
       float req_top_p = req_json.value("top_p", 0.9);
       float req_temp = req_json.value("temp", 0.9);
+      std::string stop_sequence = req_json.value("stop_sequence", "");
 
       // tokenize the prompt
       std::vector<gpt_vocab::id> input_ids = ::gpt_tokenize(vocab, req_prompt);
@@ -220,15 +236,15 @@ int main(int argc, char **argv) {
       // call model
       std::vector<std::string> output_tokens = starcoder_demo_generate(
           model, vocab, input_ids, req_n_predict, req_top_k, req_top_p,
-          req_temp, params.n_threads, params.n_batch, rng);
+          req_temp, params.n_threads, params.n_batch, rng, stop_sequence);
 
       printf("%s: output_n = %zu\n", __func__, output_tokens.size());
-      // dump output tokens
-      printf("%s: output: [", __func__);
-      for (auto &token : output_tokens) {
-        printf("%s, ", token.c_str());
-      }
-      printf("]\n");
+    //   // dump output tokens
+    //   printf("%s: output: [", __func__);
+    //   for (auto &token : output_tokens) {
+    //     printf("%s, ", token.c_str());
+    //   }
+    //   printf("]\n");
 
       std::string model_output;
       // join tokens into a string
